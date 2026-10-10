@@ -1,0 +1,20 @@
+const {JSDOM}=require('jsdom');
+const fs=require('fs'),assert=require('assert');
+(async()=>{
+const dom=new JSDOM('<body></body>',{runScripts:'outside-only',url:'https://example.invalid'}),w=dom.window;
+w.eval(fs.readFileSync(require('path').join(__dirname,'../custom_components/eufymake_activity_lab/www/panel.js'),'utf8'));
+const data={connected:true,recording:true,current:{state:5,step:7},last_received:'2026-10-10T00:00:00Z',retained:1,limit:10000,dropped:0,messages_this_session:1,commands_this_session:{1000:1},labels:{},pairs:{'5/7':1},events:[{id:'event1',time:'2026-10-10T00:00:00Z',session:'a',kind:'status',state:5,step:7,note:'<img src=x onerror=alert(1)>'}]};
+const calls=[];
+const panel=w.document.createElement('eufymake-activity-lab');w.document.body.append(panel);
+panel.hass={config:{time_zone:'America/Los_Angeles'},callWS:async request=>{calls.push(request);if(request.action==='recording')data.recording=request.data.enabled;if(request.action==='note')data.events[0].note=request.data.note;return structuredClone(data);}};
+panel.panel={config:{entry_id:'test'}};
+await new Promise(r=>setTimeout(r,20));
+assert(panel.shadowRoot.textContent.includes('5/7'));
+assert(!panel.shadowRoot.querySelector('img'));
+panel.shadowRoot.querySelector('[data-action="recording"]').click();await new Promise(r=>setTimeout(r,10));assert.strictEqual(data.recording,false);
+panel.shadowRoot.querySelector('[data-edit]').click();
+const form=panel.shadowRoot.querySelector('#note');form.querySelector('textarea').value='Observed flash clean';form.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));
+await new Promise(r=>setTimeout(r,10));assert.strictEqual(data.events[0].note,'Observed flash clean');
+assert(calls.every(c=>c.entry_id==='test'));
+dom.window.close();console.log('UI tests passed: real pause click, note submission, timezone rendering and escaped note content.');
+})().catch(e=>{console.error(e);process.exit(1)});

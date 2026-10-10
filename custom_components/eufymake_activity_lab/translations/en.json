@@ -1,0 +1,49 @@
+{
+  "title": "EufyMake Activity Lab",
+  "config": {
+    "step": {
+      "printer": {
+        "title": "Select your printer",
+        "description": "Select the E1 to connect. If connection fails, check internet access and that these are current Studio credentials.",
+        "data": {
+          "printer": "Printer"
+        }
+      },
+      "files": {
+        "title": "Connect your private Activity Lab",
+        "description": "Import your original Studio device_list.json, login_info.json and broker CA certificate. This private tool uses its own cloud connection. It records activity transitions locally; it does not control printing.",
+        "data": {
+          "device_file": "Printer file (device_list.json)",
+          "login_file": "Account file (login_info.json)",
+          "ca_file": "Studio CA certificate (.crt or .pem)"
+        }
+      },
+      "user": {
+        "title": "Set up Activity Lab",
+        "description": "Use your existing EufyMake monitor connection details, or import Studio files. Records stay on your Home Assistant instance.",
+        "menu_options": {
+          "existing": "Use an existing EufyMake monitor",
+          "files": "Import Studio files"
+        }
+      },
+      "existing": {
+        "title": "Select your existing printer monitor",
+        "description": "Reuse the selected monitor's saved credentials locally. Activity Lab makes an independent cloud connection and does not alter the monitor.",
+        "data": {
+          "monitor": "Printer monitor"
+        }
+      }
+    },
+    "error": {
+      "invalid_files": "The Studio files or CA certificate could not be read. Select the original files again. Supported regions in this preview: US, CA, MX, EU, GB, DE, FR.",
+      "invalid_auth": "Eufy rejected the connection credentials or topic access. Sign in to Studio again and reimport its current files.",
+      "cannot_connect": "Could not establish a verified connection to Eufy. Check internet access, region and Studio CA certificate.",
+      "wrong_printer": "Select the same printer when refreshing this integration\u2019s credentials.",
+      "invalid_selection": "Select a valid printer."
+    },
+    "abort": {
+      "already_configured": "This printer is already configured.",
+      "reauth_successful": "Printer credentials updated."
+    }
+  }
+}

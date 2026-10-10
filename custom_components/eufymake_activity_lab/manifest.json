@@ -1,0 +1,23 @@
+{
+  "domain": "eufymake_activity_lab",
+  "name": "EufyMake Activity Lab",
+  "version": "0.2.0",
+  "config_flow": true,
+  "documentation": "https://github.com/deadmeat75/eufymake-activity-lab",
+  "codeowners": [
+    "@deadmeat75"
+  ],
+  "dependencies": [
+    "file_upload",
+    "frontend",
+    "http",
+    "panel_custom",
+    "websocket_api"
+  ],
+  "iot_class": "cloud_push",
+  "integration_type": "device",
+  "requirements": [
+    "paho-mqtt==2.1.0"
+  ],
+  "issue_tracker": "https://github.com/deadmeat75/eufymake-activity-lab/issues"
+}

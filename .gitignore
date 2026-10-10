@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+node_modules/
+*.zip
+install_eufymake_activity_lab.py
+*.sqlite3*
+*.log
+recordings/
+.env
+login_info.json
+device_list.json
+*.crt
+*.pem

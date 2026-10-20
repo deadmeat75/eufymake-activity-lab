@@ -11,7 +11,7 @@
       },
       "files": {
         "title": "Connect your private Activity Lab",
-        "description": "Import your original Studio device_list.json, login_info.json and broker CA certificate. This private tool uses its own cloud connection. It records activity transitions locally; it does not control printing.",
+        "description": "Import your original Anker Make Studio (formerly EufyMake Studio) device_list.json, login_info.json and broker CA certificate. This private tool uses its own cloud connection. It records activity transitions locally; it does not control printing.",
         "data": {
           "device_file": "Printer file (device_list.json)",
           "login_file": "Account file (login_info.json)",

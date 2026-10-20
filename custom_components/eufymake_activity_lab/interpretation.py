@@ -53,8 +53,8 @@ class Interpretation:
             config = self.hardware.configuration()
             if after == 'none':
                 name = {'mini':'Mini Flatbed','standard':'Standard Flatbed','rotary':'Rotary'}.get(before, 'Accessory')
-                return ('No bed detected' if before is None else name + ' removed; No bed detected'), False
-            return config['effective'] + (' reported' if before is None else ' installed'), False
+                return ('No bed detected' if before is None else name + ' no longer detected; check installation and locking latch'), False
+            return config['effective'] + (' reported' if before is None else ' detected'), False
         if command == 1001 and self.pair in ((2,3),(2,4)):
             self.progress = payload.get('progress') if number(payload.get('progress')) is not None else None
             self.readings['1001'] = {'time': timestamp, 'fields': {k: (number(payload.get(k)) if number(payload.get(k)) is not None and number(payload.get(k)) >= 0 and (k != 'progress' or number(payload.get(k)) <= 10000) else None) for k in ('progress','time','totalTime')}}

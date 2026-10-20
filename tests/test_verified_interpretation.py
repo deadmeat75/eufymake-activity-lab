@@ -17,8 +17,8 @@ class InterpretationTests(unittest.TestCase):
         r=Recorder()
         for timestamp,payload in FIXTURE['accessory_events']:
             r.receive('message',payload,observed_at=timestamp)
-        installs=[e for e in r.events if e.get('detail','').endswith(' installed')]
-        self.assertEqual([e['detail'] for e in installs],['Standard Flatbed installed','Rotary installed','Mini Flatbed installed'])
+        installs=[e for e in r.events if e.get('detail','').endswith(' detected') and e.get('detail') != 'No bed detected']
+        self.assertEqual([e['detail'] for e in installs],['Standard Flatbed detected','Rotary detected','Mini Flatbed detected'])
         self.assertTrue(any(e.get('fields',{}).get('reply')==1 for e in r.events))
         self.assertEqual(r.snapshot()['decoded']['hardware']['bed']['label'],'Mini Flatbed')
         self.assertEqual(r.snapshot()['decoded']['hardware']['accessory']['code'],1)
@@ -26,7 +26,7 @@ class InterpretationTests(unittest.TestCase):
         before=len(restored.events)
         restored.receive('connected')
         restored.receive('message',{'commandType':1153,'attType':1},observed_at='2026-10-20T19:00:00Z')
-        self.assertFalse(any('installed' in e.get('detail','') for e in restored.events[before:]))
+        self.assertFalse(any(e.get('detail','').endswith(' detected') for e in restored.events[before:]))
 
     def test_duplicate_and_out_of_order_messages_do_not_revert_current_hardware(self):
         r=Recorder()
@@ -100,3 +100,22 @@ class InterpretationTests(unittest.TestCase):
         self.assertNotIn('1001',r.snapshot()['decoded']['readings'])
         r.receive('message',{'commandType':1000,'status':{'state':0,'step':0}},observed_at='2026-10-20T18:00:04Z')
         self.assertNotIn('Print completed',[e for e in r.events if e['kind']=='status'][-1]['detail'])
+
+    def test_no_detection_does_not_claim_physical_removal(self):
+        r=Recorder()
+        r.receive('message',{'commandType':1118,'plateType':2},observed_at='2026-10-20T18:00:00Z')
+        r.receive('message',{'commandType':1118,'plateType':0},observed_at='2026-10-20T18:00:01Z')
+        last=[e for e in r.events if e.get('command')==1118][-1]
+        self.assertIn('no longer detected',last['detail'])
+        self.assertIn('locking latch',last['detail'])
+        self.assertNotIn('removed',last['detail'])
+        r.receive('message',{'commandType':1118,'plateType':2},observed_at='2026-10-20T18:00:02Z')
+        last=[e for e in r.events if e.get('command')==1118][-1]
+        self.assertEqual(last['detail'],'Mini Flatbed detected')
+
+    def test_configured_retention_is_respected_on_restart(self):
+        events=[{'id':str(i),'time':'2026-10-20T18:00:00+00:00','kind':'marker','note':'Observation','revision':1} for i in range(1500)]
+        r=Recorder({'limit':5000,'events':events},limit=1000)
+        self.assertEqual(r.limit,5000)
+        self.assertEqual(len([e for e in r.events if e['kind']=='marker']),1500)
+        self.assertEqual(r.events[0]['id'],'0')

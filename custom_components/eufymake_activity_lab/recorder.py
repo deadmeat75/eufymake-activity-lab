@@ -50,7 +50,7 @@ class Recorder:
     def __init__(self, saved=None, limit=10000):
         saved = saved or {}
         self.limit = saved.get('limit', limit)
-        self.events = list(saved.get('events', []))[-limit:]
+        self.events = list(saved.get('events', []))[-self.limit:]
         self.labels = dict(saved.get('labels', {}))
         self.recording = bool(saved.get('recording', True))
         self.dropped = int(saved.get('dropped', 0))

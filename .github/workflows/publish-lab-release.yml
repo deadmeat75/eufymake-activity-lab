@@ -1,0 +1,75 @@
+name: Test and publish Activity Lab release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: activity-lab-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install test dependencies
+        run: |
+          python -m pip install -r requirements-test.txt
+          npm --prefix tests ci
+      - name: Test recorder and panel
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python -m unittest discover -s tests -v
+          npm --prefix tests test
+          node --check custom_components/eufymake_activity_lab/www/panel.js
+      - name: Verify version and build component ZIP
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python - <<'PY'
+          import json, os, re, runpy, zipfile
+          from pathlib import Path
+          tag = os.environ['RELEASE_TAG']
+          if not re.fullmatch(r'v\d+\.\d+\.\d+', tag):
+              raise SystemExit('Only numbered non-prerelease tags are published here')
+          root = Path('custom_components/eufymake_activity_lab')
+          version = json.loads((root/'manifest.json').read_text())['version']
+          assert tag == 'v' + version
+          assert runpy.run_path(str(root/'const.py'))['VERSION'] == version
+          assert Path('RELEASE_NOTES_' + version + '.md').is_file()
+          with zipfile.ZipFile('eufymake_activity_lab.zip', 'w', zipfile.ZIP_DEFLATED) as z:
+              for path in sorted(root.rglob('*')):
+                  if path.is_file() and '__pycache__' not in path.parts and path.suffix != '.pyc':
+                      z.write(path, str(path))
+              z.write('README.md')
+          with zipfile.ZipFile('eufymake_activity_lab.zip') as z:
+              assert z.testzip() is None
+          PY
+      - name: Publish versioned release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          version="${RELEASE_TAG#v}"
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Release already exists; leaving it unchanged."
+          else
+            gh release create "$RELEASE_TAG" eufymake_activity_lab.zip \
+              --verify-tag \
+              --title "EufyMake Activity Lab $RELEASE_TAG" \
+              --notes-file "RELEASE_NOTES_${version}.md" \
+              --latest
+          fi

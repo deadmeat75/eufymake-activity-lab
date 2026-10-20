@@ -2,9 +2,9 @@
 
 A developer-focused Home Assistant recorder for investigating EufyMake E1 cloud messages. It has its own domain, cloud connection and data folder, so EufyMake E1 Monitor updates do not replace it.
 
-Preview 0.2.0. Automated tests pass; installation and independent cloud connectivity still need validation on real Home Assistant hardware. This is an unofficial community tool.
+Version 0.3.0. An unofficial community tool for observational telemetry capture and interpretation. The earlier recorder has been reported working on the maintainer's Home Assistant; the new decoding remains subject to the validation limits below.
 
-Local unreleased interpretation changes are described in [TELEMETRY_IMPLEMENTATION.md](TELEMETRY_IMPLEMENTATION.md). They are on an authorized review branch, not merged, released or deployed; HACS continues to install the published version.
+Interpretation changes and limitations are described in [TELEMETRY_IMPLEMENTATION.md](TELEMETRY_IMPLEMENTATION.md). Existing recordings, notes, labels, settings and database locations are retained on update.
 
 ## Installation through HACS
 
@@ -54,7 +54,7 @@ Removing the integration deletes its database; export first. Updating the integr
 
 Config-entry credentials are stored by Home Assistant. Data files and exports do not intentionally include credentials or complete wire payloads. Text values and recognizable sensitive fields are omitted before recording. Unknown numeric fields may still contain identifying information: review unfamiliar-command exports before sharing. Do not put credentials in your notes or labels. Protect Home Assistant backups.
 
-The tool uses verified TLS and a randomized MQTT client identity. It subscribes to the known broker topics and sends a telemetry query every 30 seconds. It does not start, cancel or otherwise control printing. Parallel connections with the normal monitor are not yet verified on hardware; disable Activity Lab if coexistence causes connection problems.
+The tool uses verified TLS and a randomized MQTT client identity. It subscribes to the known broker topics and sends a telemetry query every 30 seconds. It does not start, cancel or otherwise control printing. The maintainer has reported the existing recorder working alongside the normal monitor; disable Activity Lab if coexistence causes connection problems. New code paths have standalone and UI test coverage, not a new hardware installation test.
 
 Only complete single frames are decoded. Fragmented frames are counted in diagnostics, not reassembled: their ordering semantics have not been established. Payloads over 1 MiB and batches over 256 entries are bounded. Diagnostic fields are bounded in depth, number of fields and list length. Supported region mappings are US, CA, MX, EU, GB, DE and FR.
 
@@ -74,3 +74,11 @@ Python tests cover capture, redaction, known and unfamiliar commands, checksum/f
 ## Credits
 
 Transport and credential parsing derive from the EufyMake E1 integration. Wire protocol derives from masto/eufy-ink (Unlicense); original credits and licenses are retained. New code is MIT licensed. Not affiliated with EufyMake or Home Assistant.
+
+## Updating to 0.3.0
+
+Export JSON and take a Home Assistant backup, update this existing integration through HACS, then restart Home Assistant manually when convenient and refresh the Lab browser. Do not remove/re-add the integration or delete its data directory. The monitor and Lab have separate versions and update independently.
+
+Bed absence and an unlocked locking latch can generate the same no-detection report. New history says detected/no longer detected rather than claiming physical installation or removal. A fresh no-detection report displays a check-the-latch warning; it does not measure latch position, send automatic notifications or invoke printer controls. The waste readout shows a red fullness bar (`100 - remaining capacity`) while retaining the remaining figure and raw percentage.
+
+Hardware tests use the exact reported October physical swap observations as synthetic fixtures. Available exported records directly support the Mini/Standard/removal sequence. Physical rotary replay in a newer 6,124-event export was not available here. Legacy iPad rendering has not been tested on a physical device. Camera access, controls and fragmented-message reassembly are not included.

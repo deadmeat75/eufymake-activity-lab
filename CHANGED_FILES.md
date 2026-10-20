@@ -1,6 +1,6 @@
 # Exact review-branch changed/added files
 
-Prepared for the authorized review branch only. No merge, release or Home Assistant installation was performed. The review-downloads directory contains the complete, checked component ZIP.
+Implementation list from the review branch, now prepared for authorized Activity Lab release 0.3.0. No Home Assistant installation is performed. Obsolete review-download bundles are removed from the release branch; the release workflow provides the versioned ZIP.
 
 - `CHANGED_FILES.md`
 - `README.md`

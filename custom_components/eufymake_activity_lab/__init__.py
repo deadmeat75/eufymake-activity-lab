@@ -159,7 +159,7 @@ async def async_setup_entry(hass, entry):
     try:
         await panel_custom.async_register_panel(hass, frontend_url_path=runtime.path,
             webcomponent_name='eufymake-activity-lab', sidebar_title='E1 Lab · ' + entry.data['serial'][-6:],
-            sidebar_icon='mdi:timeline-clock-outline', module_url='/eufymake_activity_lab/panel.js?v=0.2.0-telemetry',
+            sidebar_icon='mdi:timeline-clock-outline', module_url='/eufymake_activity_lab/panel.js?v=0.3.0',
             embed_iframe=False, require_admin=True, config={'entry_id': entry.entry_id})
     except Exception:
         hass.data[DOMAIN].pop(entry.entry_id, None)

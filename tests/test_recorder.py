@@ -1,9 +1,10 @@
 import importlib.util
 from pathlib import Path
 import unittest
-spec=importlib.util.spec_from_file_location('recorder',Path(__file__).parents[1]/'custom_components/eufymake_activity_lab/recorder.py')
-module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
-Recorder=module.Recorder
+import sys, types
+root=Path(__file__).parents[1]/'custom_components/eufymake_activity_lab'
+pkg=types.ModuleType('lab_recorder');pkg.__path__=[str(root)];sys.modules[pkg.__name__]=pkg
+from lab_recorder.recorder import Recorder
 
 class Tests(unittest.TestCase):
     def message(self, recorder, state, step):
@@ -23,7 +24,7 @@ class Tests(unittest.TestCase):
     def test_reconnect_records_same_pair_again(self):
         r=Recorder();r.receive('connected');self.message(r,0,0);r.receive('disconnected');r.receive('connected');self.assertTrue(self.message(r,0,0))
     def test_invalid_status_and_oversized_input(self):
-        r=Recorder();self.assertFalse(self.message(r,True,7));self.assertIsNone(r.current)
+        r=Recorder();self.assertTrue(self.message(r,True,7));self.assertIsNone(r.current);self.assertFalse(any(e['kind']=='status' for e in r.events))
         with self.assertRaises(ValueError):r.label(2,1,'x'*121,'confirmed')
         with self.assertRaises(ValueError):r.annotate(r.events[0]['id'],'x'*1001)
     def test_missing_notes_rejected(self):

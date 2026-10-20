@@ -1,0 +1,15 @@
+# Local Activity Lab telemetry enhancement
+
+Review-branch work, not merged or released. The existing integration, MQTT credentials/topics/query, SQLite journal, admin websocket actions, capture settings, retention, labels, notes, raw details, CSV/JSON exports and panel are retained.
+
+New telemetry.py and interpretation.py add observed bed/accessory meanings, operation-specific maintenance progress and event-time interpretation. Bed codes 0/1/2/3 mean absent/Standard/Mini/Rotary; accessory codes 0/1/2/4 mean absent/Mini/Standard/Rotary. The mappings are deliberately independent. Unknown codes remain Unknown (code), with no guessed bed-present state. Reply belongs to command 1118 only; raw values and their times are preserved.
+
+Important hardware changes bypass five-second sampling. Paired 1118/1153 reports do not produce duplicate installed descriptions. Baselines survive restart/reconnect without claiming a fresh installation. Redacted raw fields, original IDs, notes and revisions remain; old records are not rewritten. Timed duplicate packets are bounded-deduplicated; historical packets are ordered by their UTC observation time and cannot revert current values. MQTT callbacks capture receipt times before event-loop handoff; no job timestamp is mistaken for device event time.
+
+Current progress uses command 1001, validated progress /100, remaining seconds and elapsed totalTime. Idle, reconnects and stale data do not revive old progress. New decoded maintenance progress uses 1148 for 5/7; 1155 for 5/9 and 5/10; 1136 for 5/3; snapshot uses 1105 for 8/0. It cannot replace print progress. 13/0 and 13/1 are post-maintenance states and their residence is not active cleaning time. Transitions describe a maintenance end without claiming success if its outcome is unknown.
+
+Human displays use America/Los_Angeles with DST; JSON stays UTC. Existing user labels override built-in meanings. Version/model/serial metadata stays private in runtime memory; exported text remains omitted and numeric serial-number keys are now redacted. Tokens and identifiers are not logged. Complete wire payloads/fragment reassembly remain unavailable under the existing privacy/transport limits.
+
+Validation: 33 Python tests and both jsdom suites pass. The identical available October 20 exports contain 5,501 retained events. Read-only replay of 5,373 field records identifies one Standard Flatbed installation; later rotary observations are small synthetic fixtures copied from the user's exact physical tests. No real HA/MQTT, camera, physical iPad, deployment, HACS validator or restart test was run.
+
+No dependencies, manifests, authentication or connection configuration were changed. Frontend URL gets a development cache suffix only. Full installation and verification instructions are in the monitor checkout's MANUAL_INSTALL.md and in the local bundle README. The complete Lab component is in this project's custom_components/eufymake_activity_lab folder. Persistent databases remain outside that folder and must not be overwritten.

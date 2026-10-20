@@ -26,19 +26,37 @@ class EufyMakeActivityLab extends HTMLElement {
     finally {this.busy=false;}
   }
   esc(x) { return String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-  time(x) { return x ? new Date(x).toLocaleString(this._hass?.locale?.language||'en-US',{timeZone:this._hass?.config?.time_zone||'UTC'}) : 'Not yet received'; }
+  time(x) { return x ? new Date(x).toLocaleString(this._hass?.locale?.language||'en-US',{timeZone:'America/Los_Angeles',timeZoneName:'short'}) : 'Not yet received'; }
   pair(e) { return e.kind==='status' ? `${e.state}/${e.step}` : ''; }
-  meaning(e) { const p=this.pair(e),l=this.data.labels[p]; return l ? `${l.label} (${l.confidence})` : p ? 'Unlabeled' : e.detail || ''; }
+  meaning(e) { const p=this.pair(e),l=this.data.labels[p]; return l ? `${l.label} (${l.confidence})` : e.detail || (p ? this.builtinMeaning(e) : ''); }
+  builtinMeaning(e) {
+    const labels={'0/0':'Idle','2/1':'Transferring print file','2/2':'Waiting for Start','2/3':'Paused','2/4':'Printing','2/6':'Priming print head','5/3':'Injecting ink','5/7':'Automatic flash clean','5/9':'Automatic moisturizing','5/10':'Automatic deep cleaning','6/1':'Updating firmware','8/0':'Taking snapshot','9/0':'Calibration / self-check','13/0':'Post-moisturizing maintenance (inferred)','13/1':'Post-deep-clean maintenance'};
+    return labels[this.pair(e)] || 'Unknown (' + this.pair(e) + ')';
+  }
+  duration(value) {
+    if(typeof value!=='number'||!Number.isFinite(value)||value<0)return '—';
+    const n=Math.floor(value),h=Math.floor(n/3600),m=Math.floor(n%3600/60);
+    return (h?h+'h ':'')+(m||h?m+'m ':'')+(n%60)+'s';
+  }
+  decodedSection(d) {
+    const decoded=d.decoded||{},hw=decoded.hardware||{},read=decoded.readings||{}, activity=read.activity;
+    const fresh=x=>d.connected && x?.time && Date.now()-new Date(x.time).getTime()>=0 && Date.now()-new Date(x.time).getTime()<=120000;
+    const device=x=>x?`${this.esc(x.label)} · code ${this.esc(x.code)} · command ${this.esc(x.source_command)}${x.reply!==undefined?' · raw reply '+this.esc(x.reply):''} · ${this.esc(this.time(x.time))}`:'Not reported';
+    return `<section><h2>Printer and accessory observations</h2><p>Bed: ${device(hw.bed)}</p><p>Accessory: ${device(hw.accessory)}</p><p>${this.esc(hw.consistency||'Waiting for reports')}. Last reports may be stale; raw sources remain independent.</p><p>Activity: ${this.esc(decoded.status||'Waiting for status')} ${activity?'· '+this.esc(activity.operation)+' progress: '+(fresh(activity)&&activity.progress!==null?this.esc(activity.progress)+'%':'Unavailable / stale'):''}</p></section>`;
+  }
   liveSection(d) {
     const esc=x=>this.esc(x), fields=key=>d.live?.[key]?.fields||{}, ink=fields('1100').ink||{}, waste=fields('1100').wasteInk||{};
     const num=x=>typeof x==='number'&&Number.isFinite(x)?x:null;
     const level=x=>num(x)!==null && x>=0 && x<=10000?(x/100).toFixed(1)+'% / '+(x/100).toFixed(1)+' mL':'—';
     const expiry=x=>num(x)!==null?x+' days':'—';
-    const progress=fields('1001'), elapsed=fields('1068');
+    const active=d.connected && d.current && d.current.state===2 && [3,4].includes(d.current.step);
+    const sample=d.decoded?.readings?.['1001'];
+    const fresh=active && sample?.time && Date.now()-new Date(sample.time).getTime()>=0 && Date.now()-new Date(sample.time).getTime()<=120000;
+    const progress=fresh?sample.fields:{},elapsed=progress;
     const w=Array.isArray(waste.leftInk)?waste.leftInk[0]:waste.leftInk;
     const wasteLevel=num(w)!==null && w>=0 && w<=10000?(w/100).toFixed(1)+'%':'—';
     return `<section><h2>Latest decoded readings</h2><small>Received snapshots; may be stale when disconnected. These are observations, not control commands.</small>
-      <div class="cards"><div class="card">Progress<strong>${num(progress.progress)!==null?esc(progress.progress/100)+'%':'—'}</strong></div><div class="card">Remaining time<strong>${num(progress.time)!==null?esc(progress.time)+' s':'—'}</strong></div><div class="card">Elapsed time<strong>${num(elapsed.totalTime)!==null?esc(elapsed.totalTime)+' s':'—'}</strong></div><div class="card">Waste capacity<strong>${esc(wasteLevel)}</strong><small>Expiry ${esc(expiry(waste.distanceExpiration))}</small></div></div>
+      <div class="cards"><div class="card">Progress<strong>${num(progress.progress)!==null && progress.progress>=0 && progress.progress<=10000?esc(progress.progress/100)+'%':'—'}</strong></div><div class="card">Remaining time<strong>${num(progress.time)!==null?esc(this.duration(progress.time)):'—'}</strong></div><div class="card">Elapsed time<strong>${num(elapsed.totalTime)!==null?esc(this.duration(elapsed.totalTime)):'—'}</strong></div><div class="card">Waste capacity<strong>${esc(wasteLevel)}</strong><small>Expiry ${esc(expiry(waste.distanceExpiration))}</small></div></div>
       <div class="cards">${['Cyan','Magenta','Yellow','Black','White','Gloss'].map((name,i)=>`<div class="card">${name}<strong>${esc(level(ink.leftInk?.[i]))}</strong><small>Expiry ${esc(expiry(ink.distanceExpiration?.[i]))}</small></div>`).join('')}</div><small>Ink received: ${esc(this.time(d.live?.['1100']?.time))} · Progress received: ${esc(this.time(d.live?.['1001']?.time))}</small></section>`;
   }
   renderRows() {
@@ -65,10 +83,10 @@ class EufyMakeActivityLab extends HTMLElement {
         <div class="card">Current state / step<strong>${d.current?esc(d.current.state+'/'+d.current.step):'Not yet received'}</strong></div>
         <div class="card">Recording<strong>${d.recording?'Active':'Paused'}</strong></div>
         <div class="card">Last live message<strong>${esc(this.time(d.last_received))}</strong></div></div>
-        ${this.liveSection(d)}<div class="tools"><button data-action="marker">Mark observation now</button><button data-action="recording">${d.recording?'Pause':'Resume'} recording</button><button data-action="refresh">Refresh</button><button data-action="csv">Download CSV</button><button data-action="json">Download JSON backup</button></div>
-        <p><small>${d.retained} of ${d.limit} records retained · ${d.dropped} oldest records removed · ${d.messages_this_session} decoded messages this session. Status transitions are immediate. Changed telemetry and unfamiliar commands are sampled at most once per command every 5 seconds. Durations end at the next recorded transition or connection change; they are observations, not printer-reported timings.</small></p>
-        <section><h2>Timeline</h2><label>Filter <input id="filter" value="${esc(this.filter)}" placeholder="Pair, activity or note"></label><small>Latest 300 records shown; exports include all retained records. Times use your Home Assistant timezone.</small>
-        <div class="scroll"><table><thead><tr><th>Time</th><th>Event / command</th><th>State/step</th><th>Meaning</th><th>Duration</th><th>Your observation</th><th></th></tr></thead><tbody></tbody></table></div></section>
+        ${this.decodedSection(d)}${this.liveSection(d)}<div class="tools"><button data-action="marker">Mark observation now</button><button data-action="recording">${d.recording?'Pause':'Resume'} recording</button><button data-action="refresh">Refresh</button><button data-action="csv">Download CSV</button><button data-action="json">Download JSON backup</button></div>
+        <p><small>${d.retained} of ${d.limit} records retained · ${d.dropped} oldest records removed · ${d.messages_this_session} decoded messages this session. Status transitions are immediate. Changed telemetry and unfamiliar commands are sampled at most once per command every 5 seconds. State residence ends at the next recorded transition or connection change. It is not continuous cleaning time; 13/0 and 13/1 are persistent post-maintenance states.</small></p>
+        <section><h2>Timeline</h2><label>Filter <input id="filter" value="${esc(this.filter)}" placeholder="Pair, activity or note"></label><small>Latest 300 records shown; exports include all retained records. Times use America/Los_Angeles (including daylight saving).</small>
+        <div class="scroll"><table><thead><tr><th>Time</th><th>Event / command</th><th>State/step</th><th>Meaning</th><th>Observed state residence</th><th>Your observation</th><th></th></tr></thead><tbody></tbody></table></div></section>
         ${event?`<section style="margin-top:14px"><h2>Observation at ${esc(this.time(event.time))}</h2>${event.fields ? `<details open><summary>Decoded fields (strings and sensitive fields omitted)</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(JSON.stringify(event.fields,null,2))}</pre></details>` : ''}<form id="note"><textarea name="note" maxlength="1000" aria-label="Observation">${esc(event.note||'')}</textarea><button>Save observation</button><button type="button" data-action="close">Close</button></form></section>`:''}
         <details ${this.labelPair ? 'open' : ''}><summary>Label a state/step pair</summary><form id="label"><label>State <input name="state" type="number" value="${esc(this.labelPair?.split('/')[0] || '')}" required></label><label>Step <input name="step" type="number" value="${esc(this.labelPair?.split('/')[1] || '')}" required></label><label>Meaning <input name="label" maxlength="120" value="${esc(d.labels[this.labelPair]?.label || '')}" placeholder="e.g. Waiting for Start"></label><label>Confidence <select name="confidence"><option>suspected</option><option>confirmed</option></select></label><button>Save label</button><p><small>Use your own observations. An empty meaning removes the label. Existing history displays your latest label.</small></p></form>
         <div class="scroll"><table><thead><tr><th>Pair</th><th>Retained transitions</th><th>Label</th></tr></thead><tbody>${Object.entries(d.pairs).map(([pair,count])=>`<tr><td>${esc(pair)}</td><td>${count}</td><td>${esc(d.labels[pair]?.label||'Unlabeled')} ${esc(d.labels[pair]?.confidence||'')}</td></tr>`).join('')}</tbody></table></div></details>
@@ -94,7 +112,7 @@ class EufyMakeActivityLab extends HTMLElement {
       if(action==='csv'||action==='json'){
         const full=await this.request('export');
         const cell=x=>{let s=String(x??'');if(/^[=+\-@\t\r]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';};
-        const csv=[['time_utc','session','kind','state','step','label','confidence','duration_seconds','command','decoded_fields_json','note','detail'],...full.events.map(r=>{const l=full.labels[`${r.state}/${r.step}`]||{};return [r.time,r.session,r.kind,r.state,r.step,l.label,l.confidence,r.duration_seconds,r.command,r.fields?JSON.stringify(r.fields):'',r.note,r.detail];})].map(row=>row.map(cell).join(',')).join('\r\n');
+        const csv=[['time_utc','session','kind','state','step','label','confidence','duration_seconds','command','decoded_fields_json','note','detail'],...full.events.map(r=>{const l=full.labels[`${r.state}/${r.step}`]||{};return [r.time,r.session,r.kind,r.state,r.step,l.label,l.confidence,r.duration_seconds,r.command,r.fields?JSON.stringify(r.fields):'',r.note,r.detail||this.meaning(r)];})].map(row=>row.map(cell).join(',')).join('\r\n');
         const blob=new Blob([action==='json'?JSON.stringify(full,null,2):'\ufeff'+csv],{type:action==='json'?'application/json':'text/csv;charset=utf-8'});
         const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='eufymake-activity-'+new Date().toISOString().slice(0,10)+'.'+action;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);return;
       }

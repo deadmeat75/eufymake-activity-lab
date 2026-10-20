@@ -1,5 +1,6 @@
 """Private, independent Home Assistant activity recorder."""
 import asyncio
+from datetime import datetime, timezone
 import logging
 import sqlite3
 from pathlib import Path
@@ -33,13 +34,13 @@ class Runtime:
         self.path = 'eufymake-activity-' + entry.entry_id
 
     def cloud_event(self, kind, payload):
-        self.hass.add_job(self.receive, kind, payload)
+        self.hass.add_job(self.receive, kind, payload, datetime.now(timezone.utc).isoformat())
 
     @callback
-    def receive(self, kind, payload):
+    def receive(self, kind, payload, observed_at=None):
         if self.closed:
             return
-        if self.recorder.receive(kind, payload):
+        if self.recorder.receive(kind, payload, observed_at=observed_at):
             self.dirty = True
         if kind == 'auth_failed' and not self.reauth_started:
             self.reauth_started = True
@@ -158,7 +159,7 @@ async def async_setup_entry(hass, entry):
     try:
         await panel_custom.async_register_panel(hass, frontend_url_path=runtime.path,
             webcomponent_name='eufymake-activity-lab', sidebar_title='E1 Lab · ' + entry.data['serial'][-6:],
-            sidebar_icon='mdi:timeline-clock-outline', module_url='/eufymake_activity_lab/panel.js?v=0.2.0',
+            sidebar_icon='mdi:timeline-clock-outline', module_url='/eufymake_activity_lab/panel.js?v=0.2.0-telemetry',
             embed_iframe=False, require_admin=True, config={'entry_id': entry.entry_id})
     except Exception:
         hass.data[DOMAIN].pop(entry.entry_id, None)

@@ -4,6 +4,8 @@ A developer-focused Home Assistant recorder for investigating EufyMake E1 cloud 
 
 Preview 0.2.0. Automated tests pass; installation and independent cloud connectivity still need validation on real Home Assistant hardware. This is an unofficial community tool.
 
+Local unreleased interpretation changes are described in [TELEMETRY_IMPLEMENTATION.md](TELEMETRY_IMPLEMENTATION.md). They are on an authorized review branch, not merged, released or deployed; HACS continues to install the published version.
+
 ## Installation through HACS
 
 Requires Home Assistant Core 2026.10.0 or later and a public GitHub code repository. HACS does not support private GitHub repositories. Your data is not published with the code.
@@ -26,7 +28,7 @@ If no existing monitor is installed, choose Import Studio files. Import your `de
 - Connection, recording and session events, plus timestamped observation markers.
 - Transport diagnostics: failed checksums, fragmented frames, malformed JSON, oversized frames and oversized batches.
 
-Changed telemetry and unfamiliar commands are sampled no more than once per command every five seconds. State/step transitions are recorded immediately. Identical repeated messages are counted rather than repeatedly added to the timeline. This is an observation tool, not a complete packet capture.
+Changed telemetry and unfamiliar commands are sampled no more than once per command every five seconds, except hardware identity changes from 1118/1153, which are retained immediately. State/step transitions are recorded immediately. Identical repeated messages are counted rather than repeatedly added to the timeline. This is an observation tool, not a complete packet capture.
 
 ## Interface
 
@@ -34,11 +36,11 @@ The sidebar shows current state/step, connection status, latest-message time and
 
 **Mark observation now** saves what you are seeing without waiting for a transition. Each timeline entry has a Details / note button. State/step entries also have a Label button that prefills the pair; mark labels suspected or confirmed based on your observations.
 
-Filter by state/step, command number, label or note. The latest 300 entries are displayed; exports include all retained records. Dates use the Home Assistant timezone on screen and UTC in exports. CSV includes decoded fields as JSON in a column; JSON includes history, settings and labels. There is no export-import restore UI in this version.
+Filter by state/step, command number, label or note. The latest 300 entries are displayed; exports include all retained records. Dates use America/Los_Angeles on screen, including DST, and UTC in exports. CSV includes decoded fields as JSON in a column; JSON includes history, settings and labels. There is no export-import restore UI in this version.
 
 Capture controls independently enable telemetry and unfamiliar-command recording. Pause/resume affects automatic records; you can still add manual markers. The history limit can be changed from 1,000 to 50,000 entries (default 10,000). Oldest entries are deleted when the limit is reached or reduced. Export periodically to retain them externally.
 
-Durations measure the interval until the next recorded status, connection change or pause. They are not printer-reported timings. Telemetry messages and annotations do not end a status duration. A completed duration may include a missed transition if the cloud did not deliver it.
+Durations describe state residence, not continuous cleaning time (especially for post-maintenance states 13/0 and 13/1). They measure the interval until the next recorded status, connection change or pause. They are not printer-reported timings. Telemetry messages and annotations do not end a status duration. A completed duration may include a missed transition if the cloud did not deliver it.
 
 ## Long-term storage
 

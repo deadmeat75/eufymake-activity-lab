@@ -1,0 +1,177 @@
+{
+  "source": "Synthetic fixtures from user-verified physical tests; timestamps UTC, displayed in America/Los_Angeles",
+  "accessory_events": [
+    [
+      "2026-10-20T00:55:08Z",
+      {
+        "commandType": 1118,
+        "plateType": 0
+      }
+    ],
+    [
+      "2026-10-20T00:55:42Z",
+      {
+        "commandType": 1118,
+        "plateType": 1
+      }
+    ],
+    [
+      "2026-10-20T00:55:42Z",
+      {
+        "commandType": 1153,
+        "attType": 2
+      }
+    ],
+    [
+      "2026-10-20T00:56:01Z",
+      {
+        "commandType": 1118,
+        "plateType": 1,
+        "reply": 0
+      }
+    ],
+    [
+      "2026-10-20T18:00:15Z",
+      {
+        "commandType": 1118,
+        "plateType": 0
+      }
+    ],
+    [
+      "2026-10-20T18:00:15Z",
+      {
+        "commandType": 1153,
+        "attType": 0
+      }
+    ],
+    [
+      "2026-10-20T18:00:25Z",
+      {
+        "commandType": 1118,
+        "plateType": 0,
+        "reply": 1
+      }
+    ],
+    [
+      "2026-10-20T18:00:32Z",
+      {
+        "commandType": 1118,
+        "plateType": 3
+      }
+    ],
+    [
+      "2026-10-20T18:00:32Z",
+      {
+        "commandType": 1153,
+        "attType": 4
+      }
+    ],
+    [
+      "2026-10-20T18:00:55Z",
+      {
+        "commandType": 1118,
+        "plateType": 3,
+        "reply": 0
+      }
+    ],
+    [
+      "2026-10-20T18:40:48Z",
+      {
+        "commandType": 1118,
+        "plateType": 0
+      }
+    ],
+    [
+      "2026-10-20T18:40:48Z",
+      {
+        "commandType": 1153,
+        "attType": 0
+      }
+    ],
+    [
+      "2026-10-20T18:40:56Z",
+      {
+        "commandType": 1118,
+        "plateType": 0,
+        "reply": 1
+      }
+    ],
+    [
+      "2026-10-20T18:41:09Z",
+      {
+        "commandType": 1118,
+        "plateType": 2
+      }
+    ],
+    [
+      "2026-10-20T18:41:09Z",
+      {
+        "commandType": 1153,
+        "attType": 1
+      }
+    ],
+    [
+      "2026-10-20T18:41:21Z",
+      {
+        "commandType": 1118,
+        "plateType": 2,
+        "reply": 0
+      }
+    ]
+  ],
+  "studio_progress": [
+    {
+      "progress": 600,
+      "time": 764
+    },
+    {
+      "progress": 1000,
+      "time": 729
+    },
+    {
+      "progress": 1400,
+      "time": 702
+    },
+    {
+      "progress": 1700,
+      "time": 678,
+      "totalTime": 187
+    }
+  ],
+  "geometry": {
+    "Mini Flatbed": [
+      335,
+      90
+    ],
+    "Standard Flatbed": [
+      335,
+      420
+    ]
+  },
+  "recorded_studio_samples": [
+    {
+      "time": "2026-10-20T03:32:30.093410+00:00",
+      "progress": 600,
+      "remaining": 763,
+      "studio_remaining": 764
+    },
+    {
+      "time": "2026-10-20T03:33:05.102541+00:00",
+      "progress": 1000,
+      "remaining": 728,
+      "studio_remaining": 729
+    },
+    {
+      "time": "2026-10-20T03:33:32.624852+00:00",
+      "progress": 1400,
+      "remaining": 700,
+      "studio_remaining": 702
+    },
+    {
+      "time": "2026-10-20T03:33:54.649922+00:00",
+      "progress": 1700,
+      "remaining": 678,
+      "studio_remaining": 678
+    }
+  ]
+}

@@ -1,14 +1,18 @@
 """Bounded, persistent and credential-free activity observations."""
-from collections import Counter
+from collections import Counter, OrderedDict
 from copy import deepcopy
 from datetime import datetime, timezone
 from uuid import uuid4
 import math
+import hashlib
+import json
 import re
 import time
+from .telemetry import utc
+from .interpretation import Interpretation
 
 
-SENSITIVE = re.compile(r"secret|token|password|credential|cert|email|username|user_id|station_sn|serial|private|url|uri|path|filename|account|device_id|(^|_)id($|_)|guid|uuid|address|host|ip_address|api_key|auth|login|session|(^|_)uid($|_)|mac_address|ssid", re.I)
+SENSITIVE = re.compile(r"secret|token|password|credential|cert|email|username|user_id|station_sn|serial|private|url|uri|path|filename|account|device_id|(^|_)id($|_)|guid|uuid|address|host|ip_address|api_key|auth|login|session|(^|_)uid($|_)|mac_address|ssid|(^|_)sn($|_)", re.I)
 
 
 def safe_fields(value, depth=0):
@@ -64,15 +68,18 @@ class Recorder:
         self.capture_telemetry = bool(saved.get('capture_telemetry', True))
         self.capture_unknown = bool(saved.get('capture_unknown', True))
         self.last_data = {}
+        self.seen_reports = OrderedDict()
         self.last_capture = {}
+        self.interpretation = Interpretation(saved.get('interpretation'))
+        if 'interpretation' not in saved:
+            for event in sorted(self.events, key=lambda e: e.get('time', '')):
+                if isinstance(event.get('fields'), dict):
+                    self.interpretation.observe(event['fields'], event.get('time'))
         self._add('session', detail='Home Assistant monitor started')
 
     def _add(self, kind, **fields):
-        if len(self.events) >= self.limit:
-            self.events.pop(0)
-            self.dropped += 1
-        timestamp = utc_now()
-        if kind in ('status', 'connection', 'recording') and self.active_status:
+        timestamp = fields.pop('_time', None) or utc_now()
+        if kind in ('status', 'connection', 'recording') and not fields.get('historical') and self.active_status:
             previous = next((e for e in reversed(self.events) if e['id'] == self.active_status), None)
             if previous:
                 previous['revision'] = previous.get('revision', 1) + 1
@@ -80,23 +87,39 @@ class Recorder:
             self.active_status = None
         event = {'id': uuid4().hex, 'time': timestamp, 'session': self.session, 'revision': 1, 'kind': kind, **fields}
         self.events.append(event)
-        if kind == 'status':
+        if len(self.events) > 1 and timestamp < self.events[-2]['time']:
+            self.events.sort(key=lambda e: e['time'])
+        while len(self.events) > self.limit:
+            self.events.pop(0)
+            self.dropped += 1
+        if kind == 'status' and not fields.get('historical'):
             self.active_status = event['id']
         return event
 
-    def receive(self, kind, payload=None):
+    def receive(self, kind, payload=None, observed_at=None):
+        timestamp = utc(observed_at) if observed_at is not None else utc(utc_now())
+        if timestamp is None:
+            return False
         if kind == 'diagnostic':
-            self.diagnostics[payload['reason']] += 1
+            if not isinstance(payload, dict) or not isinstance(payload.get('reason'), str):
+                return False
+            self.diagnostics[payload['reason'][:64]] += 1
             return False
         if kind != 'message':
             connected = kind == 'connected'
             if connected != self.connected or kind == 'auth_failed':
-                self._add('connection', detail=kind)
+                self._add('connection', _time=timestamp, detail=kind)
             self.connected = connected
+            self.current = None
+            self.interpretation.readings.clear()
+            self.interpretation.progress = None
             self.last_status = None
             return True
+        timestamp = utc(observed_at) if observed_at is not None else utc(utc_now())
+        if not isinstance(payload, dict) or timestamp is None:
+            return False
         self.messages += 1
-        self.last_received = utc_now()
+        self.last_received = max(self.last_received or timestamp, timestamp)
         command = payload.get('commandType')
         command_key = str(command) if type(command) is int and 0 <= command <= 65535 else 'unspecified'
         if command_key not in self.total_commands and len(self.total_commands) >= 256:
@@ -104,28 +127,41 @@ class Recorder:
         self.commands[command_key] += 1
         self.total_commands[command_key] += 1
         fields = safe_fields(payload)
+        if observed_at is not None:
+            fingerprint = hashlib.sha256((timestamp + json.dumps(fields,sort_keys=True)).encode()).hexdigest()
+            if fingerprint in self.seen_reports:
+                return False
+            self.seen_reports[fingerprint] = True
+            if len(self.seen_reports) > 4096:
+                self.seen_reports.popitem(last=False)
+        detail, historical = self.interpretation.observe(payload, timestamp)
         known = command in (1000, 1001, 1068, 1100)
-        if known:
-            self.live[command_key] = {'time': self.last_received, 'fields': fields}
+        if known and not historical:
+            self.live[command_key] = {'time': timestamp, 'fields': fields}
         if command == 1000 and isinstance(payload.get('status'), dict):
             status = payload['status']
             state, step = status.get('state'), status.get('step')
             if type(state) is int and type(step) is int:
                 pair = (state, step)
-                self.current = {'state': state, 'step': step}
-                if pair != self.last_status:
-                    self.last_status = pair
+                if not historical:
+                    self.current = {'state': state, 'step': step}
+                if pair != self.last_status or historical:
+                    if not historical:
+                        self.last_status = pair
                     if self.recording:
-                        self._add('status', state=state, step=step, command=command, fields=fields, note='')
+                        if not historical:
+                            self.last_data[command_key] = fields
+                        self._add('status', _time=timestamp, historical=historical, state=state, step=step, command=command, fields=fields, detail=detail, note='')
                         return True
         enabled = self.capture_telemetry if known else self.capture_unknown
         changed = self.last_data.get(command_key) != fields
         now = time.monotonic()
-        if self.recording and enabled and changed and now - self.last_capture.get(command_key, -10) >= 5:
-            self.last_data[command_key] = fields
+        if self.recording and enabled and changed and (command in (1118,1153) or historical or now - self.last_capture.get(command_key, -10) >= 5):
+            if not historical:
+                self.last_data[command_key] = fields
             self.last_capture[command_key] = now
-            if command != 1000:
-                self._add('telemetry' if known else 'unknown', command=command if type(command) is int else None, fields=fields, note='')
+            if command != 1000 or changed:
+                self._add('telemetry' if known else 'unknown', _time=timestamp, historical=historical, detail=detail, command=command if type(command) is int else None, fields=fields, note='')
                 return True
         return False
 
@@ -180,7 +216,7 @@ class Recorder:
             self._add('recording', detail='resumed' if enabled else 'paused')
 
     def saved(self):
-        return deepcopy({'events': self.events, 'labels': self.labels,
+        return deepcopy({'events': self.events, 'interpretation': self.interpretation.saved(), 'labels': self.labels,
                          'recording': self.recording, 'dropped': self.dropped, 'limit': self.limit,
                          'total_commands': dict(self.total_commands), 'capture_telemetry': self.capture_telemetry, 'capture_unknown': self.capture_unknown})
 
@@ -188,6 +224,7 @@ class Recorder:
         counts = Counter(f"{e['state']}/{e['step']}" for e in self.events if e['kind'] == 'status')
         return {'version': 1, 'connected': self.connected, 'recording': self.recording,
                 'current': self.current, 'last_received': self.last_received,
+                'decoded': deepcopy(self.interpretation.snapshot()),
                 'live': deepcopy(self.live), 'diagnostics': dict(self.diagnostics),
                 'total_commands': dict(self.total_commands), 'capture_telemetry': self.capture_telemetry, 'capture_unknown': self.capture_unknown,
                 'messages_this_session': self.messages, 'commands_this_session': dict(self.commands),

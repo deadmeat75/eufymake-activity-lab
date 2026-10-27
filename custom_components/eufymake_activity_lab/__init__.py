@@ -109,7 +109,14 @@ async def websocket_action(hass, connection, msg):
     recorder = runtime.recorder
     data, action = msg['data'], msg['action']
     try:
-        if action == 'marker':
+        if action == 'compare':
+            connection.send_result(msg['id'], recorder.compare(data['first'], data['second']))
+            return
+        if action == 'bookmark':
+            recorder.bookmark(data['id'], data['enabled'])
+        elif action == 'session':
+            recorder.recording_session(data.get('name'), data.get('note',''), data.get('end',False))
+        elif action == 'marker':
             recorder.marker(data['note'])
         elif action == 'settings':
             recorder.settings(data['telemetry'], data['unknown'], data.get('retention'))
@@ -132,7 +139,7 @@ async def websocket_action(hass, connection, msg):
             raise ValueError('Unknown action')
         if action not in ('read', 'export'):
             await runtime.persist()
-        connection.send_result(msg['id'], recorder.snapshot(export=action == 'export'))
+        connection.send_result(msg['id'], recorder.snapshot(export=action == 'export', recording_session=data.get('recording_session') if action == 'export' else None))
     except (ValueError, KeyError, TypeError) as error:
         connection.send_error(msg['id'], 'invalid_request', str(error))
 
@@ -159,7 +166,7 @@ async def async_setup_entry(hass, entry):
     try:
         await panel_custom.async_register_panel(hass, frontend_url_path=runtime.path,
             webcomponent_name='eufymake-activity-lab', sidebar_title='E1 Lab · ' + entry.data['serial'][-6:],
-            sidebar_icon='mdi:timeline-clock-outline', module_url='/eufymake_activity_lab/panel.js?v=0.3.0',
+            sidebar_icon='mdi:timeline-clock-outline', module_url='/eufymake_activity_lab/panel.js?v=0.4.0',
             embed_iframe=False, require_admin=True, config={'entry_id': entry.entry_id})
     except Exception:
         hass.data[DOMAIN].pop(entry.entry_id, None)

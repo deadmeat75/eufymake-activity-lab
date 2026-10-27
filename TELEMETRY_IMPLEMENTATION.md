@@ -1,3 +1,7 @@
+# Current preparation
+
+See [NEXT_RELEASE.md](NEXT_RELEASE.md) for Monitor 1.2.0 / Activity Lab 0.4.0 behavior, evidence, limits and validation. The following sections document the previously published baseline; current waste colors, latch wording, optional notifications and history features supersede their older descriptions.
+
 # Activity Lab 0.3.0 telemetry enhancement
 
 Prepared for the authorized Activity Lab 0.3.0 release. No Home Assistant installation or restart is performed by publication. The existing integration, MQTT credentials/topics/query, SQLite journal, admin websocket actions, capture settings, retention, labels, notes, raw details, CSV/JSON exports and panel are retained.

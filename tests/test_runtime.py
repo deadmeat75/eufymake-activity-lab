@@ -53,3 +53,23 @@ class Tests(unittest.IsolatedAsyncioTestCase):
         saved=await self.r.store.async_load();self.assertTrue(any(e.get('state')==8 for e in saved['events']))
     async def test_invalid_label_rejected(self):
         c=Conn(True);await runtime.websocket_action(self.hass,c,{'id':1,'entry_id':'test','action':'label','data':{'state':'bad','step':2,'label':'Wait','confidence':'confirmed'}});self.assertEqual(c.error,'invalid_request')
+
+    async def test_session_bookmark_compare_and_scoped_export_are_saved(self):
+        c=Conn(True)
+        async def action(name,data):
+            c.error=None
+            await runtime.websocket_action(self.hass,c,{'id':1,'entry_id':'test','action':name,'data':data})
+            self.assertIsNone(c.error)
+            return c.result
+        await action('session',{'name':'Bed test','note':'Safe observation'})
+        sid=self.r.recorder.active_recording
+        a=self.r.recorder._add('unknown',fields={'plateType':0})
+        b=self.r.recorder._add('unknown',fields={'plateType':2})
+        await action('bookmark',{'id':a['id'],'enabled':True})
+        self.assertTrue(next(e for e in (await self.r.store.async_load())['events'] if e['id']==a['id'])['bookmark'])
+        comparison=await action('compare',{'first':a['id'],'second':b['id']})
+        self.assertEqual(comparison['changes'][0]['field'],'$.plateType')
+        await action('session',{'end':True})
+        exported=await action('export',{'recording_session':sid})
+        self.assertTrue(all(e.get('recording_session')==sid for e in exported['events']))
+        self.assertNotIn('decoded',exported)

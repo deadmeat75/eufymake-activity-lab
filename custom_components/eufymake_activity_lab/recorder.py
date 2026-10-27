@@ -51,6 +51,8 @@ class Recorder:
         saved = saved or {}
         self.limit = saved.get('limit', limit)
         self.events = list(saved.get('events', []))[-self.limit:]
+        self.recordings = list(saved.get('recordings', []))[-100:]
+        self.active_recording = saved.get('active_recording')
         self.labels = dict(saved.get('labels', {}))
         self.recording = bool(saved.get('recording', True))
         self.dropped = int(saved.get('dropped', 0))
@@ -75,6 +77,19 @@ class Recorder:
             for event in sorted(self.events, key=lambda e: e.get('time', '')):
                 if isinstance(event.get('fields'), dict):
                     self.interpretation.observe(event['fields'], event.get('time'))
+        if 'insights' not in (saved.get('interpretation') or {}):
+            from .insights import Insights
+            self.interpretation.insights = Insights()
+            # Backfill bounded summaries from retained redacted observations on upgrade.
+            # Do not rewrite original IDs, notes, fields or event timestamps.
+            for event in sorted(self.events, key=lambda e: e.get('time', '')):
+                if event.get('kind') in ('connection','session'):
+                    self.interpretation.insights.connection_event(event.get('detail') == 'connected', event.get('time'))
+                elif isinstance(event.get('fields'), dict):
+                    self.interpretation.insights.observe(event['fields'], event.get('time'))
+        history = self.interpretation.insights
+        history.pair = history.job = history.operation = history.ink = None
+        history.connection = history.connection_time = None
         self._add('session', detail='Home Assistant monitor started')
 
     def _add(self, kind, **fields):
@@ -86,6 +101,8 @@ class Recorder:
                 previous['duration_seconds'] = max(0, round((datetime.fromisoformat(timestamp) - datetime.fromisoformat(previous['time'])).total_seconds(), 1))
             self.active_status = None
         event = {'id': uuid4().hex, 'time': timestamp, 'session': self.session, 'revision': 1, 'kind': kind, **fields}
+        if self.active_recording:
+            event['recording_session'] = self.active_recording
         self.events.append(event)
         if len(self.events) > 1 and timestamp < self.events[-2]['time']:
             self.events.sort(key=lambda e: e['time'])
@@ -109,6 +126,7 @@ class Recorder:
             connected = kind == 'connected'
             if connected != self.connected or kind == 'auth_failed':
                 self._add('connection', _time=timestamp, detail=kind)
+            self.interpretation.insights.connection_event(connected, timestamp)
             self.connected = connected
             self.current = None
             self.interpretation.readings.clear()
@@ -215,14 +233,75 @@ class Recorder:
             self.last_status = None
             self._add('recording', detail='resumed' if enabled else 'paused')
 
+    def bookmark(self, event_id, enabled):
+        if type(enabled) is not bool:
+            raise ValueError('Bookmark must be true or false')
+        for event in self.events:
+            if event['id'] == event_id:
+                event['bookmark'] = enabled
+                event['revision'] = event.get('revision', 1) + 1
+                return
+        raise ValueError('Record no longer exists')
+
+    def recording_session(self, name=None, note='', end=False):
+        timestamp = utc(utc_now())
+        if not isinstance(note, str) or len(note) > 1000:
+            raise ValueError('Session notes must contain at most 1000 characters')
+        if type(end) is not bool:
+            raise ValueError('Session end must be true or false')
+        if end:
+            record = next((r for r in self.recordings if r['id'] == self.active_recording), None)
+            if record:
+                record['end'] = timestamp
+                if note.strip():
+                    record['end_note'] = note.strip()
+                self._add('marker', note='Recording session ended: ' + record['name'])
+            self.active_recording = None
+            return
+        if self.active_recording:
+            raise ValueError('End the current named session first')
+        if not isinstance(name, str) or not 1 <= len(name.strip()) <= 120:
+            raise ValueError('Enter a session name of at most 120 characters')
+        record = {'id': uuid4().hex, 'name': name.strip(), 'note': note.strip(), 'start': timestamp}
+        self.recordings.append(record)
+        self.recordings = self.recordings[-100:]
+        self.active_recording = record['id']
+        self._add('marker', note='Recording session started: ' + record['name'])
+
+    def compare(self, first, second):
+        events = {e['id']:e for e in self.events if e['id'] in (first, second)}
+        if len(events) != 2:
+            raise ValueError('Select two different retained records')
+        def flatten(value, path='$'):
+            if isinstance(value, dict) and value:
+                return {k:v for key,item in value.items() for k,v in flatten(item, path + '.' + key).items()}
+            if isinstance(value, list) and value:
+                return {k:v for index,item in enumerate(value) for k,v in flatten(item, path + '[' + str(index) + ']').items()}
+            return {path:value}
+        a, b = flatten(events[first].get('fields', {})), flatten(events[second].get('fields', {}))
+        changes = [{'field':k,'before':a.get(k),'after':b.get(k),'before_present':k in a,'after_present':k in b} for k in sorted(a.keys() | b.keys()) if k not in a or k not in b or a[k] != b[k]]
+        return {'first':first,'second':second,'first_time':events[first]['time'],'second_time':events[second]['time'],'changes':changes}
+
     def saved(self):
-        return deepcopy({'events': self.events, 'interpretation': self.interpretation.saved(), 'labels': self.labels,
+        return deepcopy({'recordings': self.recordings, 'active_recording': self.active_recording, 'events': self.events, 'interpretation': self.interpretation.saved(), 'labels': self.labels,
                          'recording': self.recording, 'dropped': self.dropped, 'limit': self.limit,
                          'total_commands': dict(self.total_commands), 'capture_telemetry': self.capture_telemetry, 'capture_unknown': self.capture_unknown})
 
-    def snapshot(self, export=False):
-        counts = Counter(f"{e['state']}/{e['step']}" for e in self.events if e['kind'] == 'status')
-        return {'version': 1, 'connected': self.connected, 'recording': self.recording,
+    def snapshot(self, export=False, recording_session=None):
+        events = self.events
+        if recording_session:
+            if not any(r['id'] == recording_session for r in self.recordings):
+                raise ValueError('Recording session no longer exists')
+            events = [e for e in events if e.get('recording_session') == recording_session]
+        counts = Counter(f"{e['state']}/{e['step']}" for e in events if e['kind'] == 'status')
+        if recording_session:
+            return {'version':1, 'export_recording_session':recording_session, 'exported_records':len(events),
+                    'retention_dropped_total':self.dropped, 'events':deepcopy(events), 'pairs':dict(counts),
+                    'labels':deepcopy({k:v for k,v in self.labels.items() if k in counts}),
+                    'recordings':deepcopy([r for r in self.recordings if r['id']==recording_session])}
+        return {'recordings': deepcopy(self.recordings), 'active_recording': self.active_recording,
+                'export_recording_session': recording_session, 'exported_records': len(events) if export else None,
+                'bookmarks': sum(bool(e.get('bookmark')) for e in self.events), 'version': 1, 'connected': self.connected, 'recording': self.recording,
                 'current': self.current, 'last_received': self.last_received,
                 'decoded': deepcopy(self.interpretation.snapshot()),
                 'live': deepcopy(self.live), 'diagnostics': dict(self.diagnostics),
@@ -230,4 +309,4 @@ class Recorder:
                 'messages_this_session': self.messages, 'commands_this_session': dict(self.commands),
                 'retained': len(self.events), 'limit': self.limit, 'dropped': self.dropped,
                 'labels': deepcopy(self.labels), 'pairs': dict(counts),
-                'events': deepcopy(self.events if export else self.events[-300:])}
+                'events': deepcopy(events if export else events[-300:])}

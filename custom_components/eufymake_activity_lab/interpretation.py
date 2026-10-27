@@ -1,10 +1,12 @@
 """Human-readable interpretation alongside (never instead of) redacted raw records."""
+from .insights import Insights
 from .telemetry import Hardware, OPERATIONS, STATUS, number, utc, transition
 
 
 class Interpretation:
     def __init__(self, saved=None):
         saved = saved or {}
+        self.insights = Insights(saved.get('insights'))
         self.hardware = Hardware(saved.get('hardware'))
         self.pair = tuple(saved['pair']) if saved.get('pair') else None
         self.clocks = dict(saved.get('clocks', {}))
@@ -12,14 +14,14 @@ class Interpretation:
         self.readings = {}  # Session freshness is not restored across restarts.
 
     def saved(self):
-        return {'hardware': self.hardware.reports, 'pair': self.pair,
+        return {'insights': self.insights.saved(), 'hardware': self.hardware.reports, 'pair': self.pair,
                 'clocks': self.clocks, 'progress': self.progress}
 
     def observe(self, payload, timestamp):
         if not isinstance(payload, dict):
             return '', False
         command = payload.get('commandType')
-        if type(command) is not int or command not in (1000,1001,1068,1100,1105,1118,1133,1136,1148,1153,1155):
+        if type(command) is not int or command not in (1000,1001,1068,1100,1105,1118,1133,1136,1140,1148,1153,1155):
             return '', False
         timestamp = utc(timestamp)
         if timestamp is None:
@@ -27,6 +29,7 @@ class Interpretation:
         if timestamp < self.clocks.get(str(command), timestamp):
             return 'Historical report (out of order; current state unchanged)', True
         self.clocks[str(command)] = timestamp
+        self.insights.observe(payload, timestamp)
         if command == 1000:
             status = payload.get('status')
             if not isinstance(status, dict) or type(status.get('state')) is not int or type(status.get('step')) is not int:
@@ -66,5 +69,5 @@ class Interpretation:
         return '', False
 
     def snapshot(self):
-        return {'hardware': self.hardware.configuration(), 'readings': self.readings,
+        return {'history': self.insights.public(), 'hardware': self.hardware.configuration(), 'readings': self.readings,
                 'status': STATUS.get(self.pair, 'Unknown (%s/%s)' % self.pair) if self.pair else None}

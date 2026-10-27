@@ -2,9 +2,24 @@
 
 A developer-focused Home Assistant recorder for investigating EufyMake E1 cloud messages. It has its own domain, cloud connection and data folder, so EufyMake E1 Monitor updates do not replace it.
 
-Version 0.3.0. An unofficial community tool for observational telemetry capture and interpretation. The earlier recorder has been reported working on the maintainer's Home Assistant; the new decoding remains subject to the validation limits below.
+Version 0.4.0. An unofficial community tool for observational telemetry capture and interpretation. The earlier recorder has been reported working on the maintainer's Home Assistant; the new decoding remains subject to the validation limits below.
 
 Interpretation changes and limitations are described in [TELEMETRY_IMPLEMENTATION.md](TELEMETRY_IMPLEMENTATION.md). Existing recordings, notes, labels, settings and database locations are retained on update.
+
+See [NEXT_RELEASE.md](NEXT_RELEASE.md) for the changes and upgrade checks.
+
+- Bookmark retained records and filter bookmarks.
+- Select two records to compare captured/redacted fields, including added or missing fields and array elements.
+- Start/end named recording sessions with observations, and export retained records for one session only.
+- Backfill bounded print, maintenance, connection and ink inventory summaries from retained history on upgrade.
+- Preserve completed-print metrics after Idle; keep job quantity units and command-1140 meaning unverified.
+- Show ink-supply history, estimated finish time, freshness, known bed dimensions and revised latch guidance.
+- Color the growing waste-fill bar green below 60%, yellow below 80%, red at 80% and above.
+- Keep normal polling to the latest 300 records. Load older records explicitly and display at most 300 rows per page.
+- Preserve the existing SQLite journal, labels, notes, capture settings, event IDs, raw redaction and admin-only interface.
+
+Bookmarks follow ordinary retention limits. Session export includes only retained session events; it cannot recover dropped records. See NEXT_RELEASE.md for upgrade checks and limits.
+
 
 ## Installation through HACS
 
